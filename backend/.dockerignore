@@ -1,0 +1,38 @@
+# Python artefaktlari
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual muhitlar
+.venv/
+venv/
+env/
+
+# Test / lint kesh
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Sirlar va lokal fayllar
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Hujjatlar (image'da kerak emas)
+*.md

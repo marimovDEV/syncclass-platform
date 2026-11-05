@@ -1,0 +1,238 @@
+# SyncClass CI — lint + test + build tekshiruvi.
+# DEPLOY YO'Q (AUDIT.md §J3: lokal Docker dev; prod keyingi bosqich).
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  # ---------------------------------------------------------------- backend ---
+  backend:
+    name: Backend (ruff + pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: syncclass
+          POSTGRES_PASSWORD: syncclass
+          POSTGRES_DB: syncclass_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U syncclass -d syncclass_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    env:
+      # Testlar haqiqiy Postgres/Redis bilan ishlaydi (konteynerlar yuqorida).
+      APP_ENV: development
+      SECRET_KEY: ci-only-insecure-secret
+      DATABASE_URL: postgresql+asyncpg://syncclass:syncclass@localhost:5432/syncclass_test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: syncclass
+      POSTGRES_PASSWORD: syncclass
+      POSTGRES_DB: syncclass_test
+      # `make test` bilan bir xil: 15-DB. CI da ilova ishlamagani uchun /0 ham
+      # xavfsiz bo'lardi, LEKIN `tests/conftest.py` 0-DB da ishga tushishni rad
+      # etadi — demak /15 shu yerda ham MAJBURIY, nafaqat izchillik uchun.
+      REDIS_URL: redis://localhost:6379/15
+      # Sirlar CI da BO'SH — tashqi servislarga chiqadigan test bo'lmasligi kerak.
+      GOOGLE_CLIENT_ID: ""
+      GOOGLE_CLIENT_SECRET: ""
+      ANTHROPIC_API_KEY: ""
+      R2_ACCESS_KEY_ID: ""
+      R2_SECRET_ACCESS_KEY: ""
+      TELEGRAM_BOT_TOKEN: ""
+      TELEGRAM_BACKUP_ENABLED: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Bog'liqliklarni o'rnatish
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: ruff check
+        working-directory: backend
+        run: ruff check app tests
+
+      # `backend/pyproject.toml` da [tool.ruff] bor (line-length 100, py312).
+      # `ruff check` yuqorida BLOKLAYDI; formatlash esa faqat ogohlantiradi —
+      # stil farqi tufayli butun CI qizarmasligi uchun.
+      - name: ruff format --check (ogohlantirish)
+        working-directory: backend
+        continue-on-error: true
+        run: ruff format --check app tests
+
+      - name: Alembic migratsiyalari
+        working-directory: backend
+        run: |
+          if [ -f alembic.ini ]; then
+            alembic upgrade head
+          else
+            echo "::warning::backend/alembic.ini topilmadi — migratsiya bosqichi o'tkazib yuborildi"
+          fi
+
+      - name: pytest
+        working-directory: backend
+        run: python -m pytest -q tests
+
+  # --------------------------------------------------------------- frontend ---
+  frontend:
+    name: Frontend (tsc + next build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+      NEXT_PUBLIC_WS_URL: ws://localhost/ws
+      NEXT_PUBLIC_LIVEKIT_URL: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: package.json bormi?
+        id: pkg
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::frontend/package.json topilmadi — frontend bosqichi o'tkazib yuborildi"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.pkg.outputs.exists == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Bog'liqliklarni o'rnatish
+        if: steps.pkg.outputs.exists == 'true'
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: tsc --noEmit
+        if: steps.pkg.outputs.exists == 'true'
+        working-directory: frontend
+        run: npx --yes tsc --noEmit
+
+      - name: next build
+        if: steps.pkg.outputs.exists == 'true'
+        working-directory: frontend
+        run: npm run build
+
+      - name: standalone chiqishi tekshirildi
+        if: steps.pkg.outputs.exists == 'true'
+        working-directory: frontend
+        run: |
+          test -f .next/standalone/server.js \
+            || { echo "::error::next.config da output:'standalone' yoqilmagan — Dockerfile ishlamaydi"; exit 1; }
+
+  # ------------------------------------------------------------ infra (docker) ---
+  infra:
+    name: Infra (compose config + nginx -t + image build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .env tayyorlash
+        run: cp .env.example .env
+
+      - name: docker compose config
+        run: docker compose config
+
+      - name: Nginx konfiguratsiyasi sintaksisi
+        run: |
+          # Upstream nomlari (backend/frontend) compose tarmog'idan tashqarida
+          # hal qilinmaydi, shuning uchun /etc/hosts ga vaqtincha yozib qo'yamiz.
+          docker run --rm \
+            --add-host backend:127.0.0.1 \
+            --add-host frontend:127.0.0.1 \
+            -v "$PWD/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/nginx/conf.d:/etc/nginx/conf.d:ro" \
+            nginx:1.27-alpine nginx -t
+
+      - name: .env.example kontraktga mos (CONTRACTS.md §1)
+        run: |
+          python3 - <<'PY'
+          import re, sys
+          block = open("docs/CONTRACTS.md").read().split("## 1. Environment")[1].split("```")[1]
+          block = re.sub(r"([A-Z_]+)\{([^}]*)\}",
+                         lambda m: " ".join(m.group(1) + p.strip() for p in m.group(2).split(",")),
+                         block)
+          block = re.sub(r"\([^)]*\)", "", block)
+          need = {t for t in re.split(r"[^A-Z0-9_]+", block) if t and t[0].isalpha()}
+          have = set(re.findall(r"^([A-Z][A-Z0-9_]*)=", open(".env.example").read(), re.M))
+          missing = sorted(need - have)
+          if missing:
+              print("::error::.env.example da yetishmayotgan o'zgaruvchilar: " + ", ".join(missing))
+              sys.exit(1)
+          print(f"OK — kontraktdagi {len(need)} ta o'zgaruvchi .env.example da bor")
+          PY
+
+      - name: Backend image build
+        run: docker compose build backend
+
+      - name: Frontend image build
+        run: |
+          if [ -f frontend/package.json ]; then
+            docker compose build frontend
+          else
+            echo "::warning::frontend/package.json yo'q — frontend image build o'tkazib yuborildi"
+          fi
+
+  # ----------------------------------------------------------------- skriptlar ---
+  scripts:
+    name: Shell skriptlari (shellcheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n (sintaksis)
+        run: for f in scripts/*.sh; do bash -n "$f"; done
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # SC1091: source qilinadigan fayl CI da yo'q; SC2086: ataylab bo'linadigan joylar bor.
+          shellcheck --severity=warning --exclude=SC1091 scripts/*.sh

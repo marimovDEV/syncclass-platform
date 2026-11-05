@@ -1,0 +1,41 @@
+# --- Core ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+
+# --- Database ---
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+greenlet==3.1.1
+
+# --- Cache / Pub-Sub / Queue ---
+redis==5.2.1
+arq==0.26.3
+
+# --- Auth ---
+python-jose[cryptography]==3.3.0
+google-auth==2.37.0
+httpx==0.28.1
+
+# --- Storage ---
+boto3==1.35.90
+aiogram==3.16.0   # 3.15.0 `pydantic<2.10` talab qiladi -> pydantic 2.10.4 bilan ziddiyat (ResolutionImpossible)
+
+# --- AI ---
+anthropic==2.4.0   # 0.42.0 juda eski: `strict`, `output_config.format` yo'q
+
+# --- Real-time / Media ---
+livekit-api==0.8.1
+
+# --- Utils ---
+qrcode[pil]==8.0
+python-pptx==1.0.2   # PPTX import (CONTRACTS.md §16.2); resolve_entities=False — testda isbotlangan
+orjson==3.10.13
+
+# --- Dev / Test ---
+pytest==8.3.4
+pytest-asyncio==0.25.0
+ruff==0.8.6

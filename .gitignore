@@ -1,0 +1,78 @@
+# ============================== Sirlar ====================================
+# .env ichida SECRET_KEY, Google/R2/Anthropic/LiveKit kalitlari bo'ladi.
+.env
+.env.*
+!.env.example
+
+# ============================== Python ====================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.Python
+
+# Virtual muhitlar
+.venv/
+venv/
+ENV/
+env/
+
+# Test / lint kesh
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+
+# ============================== Node / Next.js ============================
+node_modules/
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.yarn/
+.next/
+out/
+build/
+next-env.d.ts
+.eslintcache
+.turbo/
+*.tsbuildinfo
+
+# E2E / test artefaktlari
+playwright-report/
+test-results/
+coverage/
+
+# ============================== Docker / infra ============================
+# Lokal compose override (har kimning o'ziga xos sozlamasi)
+docker-compose.override.yml
+# Nginx loglari (konteyner tashqarisiga mount qilinsa)
+nginx/logs/
+# Loadtest / verify natijalari
+artifacts/
+*.loadtest.json
+
+# ============================== IDE / OS ==================================
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================== Boshqa ====================================
+*.log
+*.pid
+*.sqlite3
+*.db
+tmp/
+.cache/

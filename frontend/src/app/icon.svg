@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!--
+    ISTISNO (hardcoded rang): favicon CSS o'zgaruvchilarini o'qiy olmaydi.
+    Qiymatlar src/app/globals.css dagi primary va primary-fg tokenlari bilan AYNAN bir xil:
+      yorug'   primary 84 66 245  = #5442F5   primary-fg 255 255 255 = #FFFFFF
+      qorong'i primary 139 124 255 = #8B7CFF  primary-fg 10 8 32     = #0A0820
+    Yorug' qiymatlar ATRIBUT sifatida yozilgan: favicon da style yoki
+    prefers-color-scheme ni qo'llamaydigan brauzerda ham yorug' variant chiqadi.
+    Matn rangi ham rejim bilan almashadi: qorong'ida oq matn #8B7CFF ustida
+    kontrastdan yiqiladi, shuning uchun primary-fg ishlatiladi.
+    DIQQAT: XML izohi ichida ikki tire ketma-ket yozilmasin (SVG buziladi).
+  -->
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #8B7CFF; }
+      .fg { fill: #0A0820; }
+    }
+  </style>
+  <rect class="bg" width="32" height="32" rx="8" fill="#5442F5"/>
+  <text class="fg" x="16" y="21" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" fill="#FFFFFF" text-anchor="middle">SC</text>
+</svg>

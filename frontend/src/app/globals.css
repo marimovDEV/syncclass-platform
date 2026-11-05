@@ -1,0 +1,263 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------------- */
+/* Dizayn tokenlari — CONTRACTS.md §9 nomlari + docs/DESIGN_GLOW.md §3 qiymatlari. */
+/* Qiymatlar `R G B` (Tailwind: `rgb(var(--x) / <alpha-value>)`).               */
+/* ⚠️ Token NOMLARI o'zgarmaydi — boshqa agentlar ularga tayanadi.              */
+/* ⚠️ Qorong'i qiymatlar IKKI blokda (data-theme va prefers-color-scheme)        */
+/*    bir xil — ikkalasi bitta manbadan generatsiya qilingan.                   */
+/* ------------------------------------------------------------------------- */
+
+@layer base {
+  /* Yorug' rejim (default) — glow sezilarli kuchsiz: nur emas, soya. */
+  :root {
+    --bg: 244 245 255;
+    --surface: 255 255 255;
+    --surface-2: 238 240 255;
+    --border: 218 221 245;
+    --fg: 18 22 58;
+    --muted: 84 92 138;
+    --primary: 84 66 245;
+    --primary-fg: 255 255 255;
+    --accent: 14 116 144;
+    --accent-fg: 255 255 255;
+    --danger: 190 18 60;
+    --danger-fg: 255 255 255;
+    --success: 4 120 87;
+    --success-fg: 255 255 255;
+    --ring: 84 66 245;
+    --shadow-color: 18 22 58;
+
+    /* Glow — DESIGN_GLOW §3. Faqat ierarxiya uchun: primary tugma, fokus, LIVE, faol slayd, taymer. */
+    --glow-primary: 0 0 0 1px rgb(var(--primary) / .25), 0 0 18px rgb(var(--primary) / .15), 0 0 48px rgb(var(--primary) / .06);
+    --glow-accent: 0 0 0 1px rgb(var(--accent) / .25), 0 0 18px rgb(var(--accent) / .15), 0 0 48px rgb(var(--accent) / .06);
+    --glow-soft: 0 0 0 1px rgb(var(--primary) / .14), 0 0 24px rgb(var(--primary) / .05);
+
+    --shadow-soft: 0 1px 2px rgb(var(--shadow-color) / 0.05), 0 2px 8px rgb(var(--shadow-color) / 0.06);
+    --shadow-lifted: 0 2px 4px rgb(var(--shadow-color) / 0.06), 0 16px 40px rgb(var(--shadow-color) / 0.12);
+
+    /* Statik aurora (login/onboarding/landing) — kuchi rejimga bog'liq. */
+    --aurora-a1: 0.12;
+    --aurora-a2: 0.08;
+    --aurora-a3: 0.07;
+
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
+    color-scheme: light;
+  }
+
+  /* Qorong'i #1 — foydalanuvchi tanlovi (ThemeToggle `data-theme` yozadi). */
+  :root[data-theme='dark'] {
+    --bg: 7 9 22;
+    --surface: 14 17 38;
+    --surface-2: 22 27 58;
+    --border: 40 46 88;
+    --fg: 236 239 255;
+    --muted: 160 168 210;
+    --primary: 139 124 255;
+    --primary-fg: 10 8 32;
+    --accent: 34 211 238;
+    --accent-fg: 2 28 34;
+    --danger: 251 113 133;
+    --danger-fg: 42 4 14;
+    --success: 52 211 153;
+    --success-fg: 2 36 26;
+    --ring: 139 124 255;
+    --shadow-color: 0 0 0;
+
+    /* Glow — DESIGN_GLOW §3. Faqat ierarxiya uchun: primary tugma, fokus, LIVE, faol slayd, taymer. */
+    --glow-primary: 0 0 0 1px rgb(var(--primary) / .45), 0 0 18px rgb(var(--primary) / .35), 0 0 48px rgb(var(--primary) / .18);
+    --glow-accent: 0 0 0 1px rgb(var(--accent) / .45), 0 0 18px rgb(var(--accent) / .35), 0 0 48px rgb(var(--accent) / .18);
+    --glow-soft: 0 0 0 1px rgb(var(--primary) / .25), 0 0 24px rgb(var(--primary) / .12);
+
+    --shadow-soft: 0 1px 2px rgb(var(--shadow-color) / 0.5), 0 2px 8px rgb(var(--shadow-color) / 0.35);
+    --shadow-lifted: 0 2px 4px rgb(var(--shadow-color) / 0.5), 0 16px 40px rgb(var(--shadow-color) / 0.55);
+
+    /* Statik aurora (login/onboarding/landing) — kuchi rejimga bog'liq. */
+    --aurora-a1: 0.22;
+    --aurora-a2: 0.13;
+    --aurora-a3: 0.12;
+    color-scheme: dark;
+  }
+
+  /* Qorong'i #2 — tizim tanlovi, foydalanuvchi `light` ni majburlamagan bo'lsa. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: 7 9 22;
+      --surface: 14 17 38;
+      --surface-2: 22 27 58;
+      --border: 40 46 88;
+      --fg: 236 239 255;
+      --muted: 160 168 210;
+      --primary: 139 124 255;
+      --primary-fg: 10 8 32;
+      --accent: 34 211 238;
+      --accent-fg: 2 28 34;
+      --danger: 251 113 133;
+      --danger-fg: 42 4 14;
+      --success: 52 211 153;
+      --success-fg: 2 36 26;
+      --ring: 139 124 255;
+      --shadow-color: 0 0 0;
+
+      /* Glow — DESIGN_GLOW §3. Faqat ierarxiya uchun: primary tugma, fokus, LIVE, faol slayd, taymer. */
+      --glow-primary: 0 0 0 1px rgb(var(--primary) / .45), 0 0 18px rgb(var(--primary) / .35), 0 0 48px rgb(var(--primary) / .18);
+      --glow-accent: 0 0 0 1px rgb(var(--accent) / .45), 0 0 18px rgb(var(--accent) / .35), 0 0 48px rgb(var(--accent) / .18);
+      --glow-soft: 0 0 0 1px rgb(var(--primary) / .25), 0 0 24px rgb(var(--primary) / .12);
+
+      --shadow-soft: 0 1px 2px rgb(var(--shadow-color) / 0.5), 0 2px 8px rgb(var(--shadow-color) / 0.35);
+      --shadow-lifted: 0 2px 4px rgb(var(--shadow-color) / 0.5), 0 16px 40px rgb(var(--shadow-color) / 0.55);
+
+      /* Statik aurora (login/onboarding/landing) — kuchi rejimga bog'liq. */
+      --aurora-a1: 0.22;
+      --aurora-a2: 0.13;
+      --aurora-a3: 0.12;
+      color-scheme: dark;
+    }
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-bg font-sans text-fg antialiased;
+    /* AUDIT.md §G5 — mobil brauzerda 100vh sakraydi. */
+    min-height: 100dvh;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
+  }
+
+  /*
+   * Klaviatura fokusi (DESIGN_GLOW §5): `outline` HECH QACHON yo'qolmaydi,
+   * glow unga QO'SHIMCHA. Komponentlar `outline-none` yozmasligi kerak.
+   */
+  :where(a, button, input, select, textarea, summary, [tabindex], [role='button']):focus-visible {
+    outline: 2px solid rgb(var(--ring));
+    outline-offset: 2px;
+    box-shadow: var(--glow-soft);
+  }
+
+  code,
+  pre,
+  kbd {
+    @apply font-mono;
+  }
+}
+
+/*
+ * Bosiladigan yuza (kartochka/qator havolasi) — DESIGN_GLOW §2: DOIM emas, faqat
+ * hover va klaviatura fokusida NOZIK chegara nuri. Yagona manba: `Card interactive`
+ * va ro'yxat havolalari shu sinfni ishlatadi. Jadval/hisobot/IDE da ishlatilmaydi.
+ */
+@layer components {
+  .interactive-glow {
+    @apply transition-[border-color,box-shadow,background-color] duration-150;
+  }
+
+  .interactive-glow:hover,
+  .interactive-glow:focus-within,
+  .interactive-glow:focus-visible {
+    @apply border-primary/40;
+    box-shadow: var(--glow-soft);
+  }
+}
+
+@layer utilities {
+  /* Pastki panel (Bottom Action Bar) uchun — AUDIT.md §G5. */
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
+  }
+
+  .h-dvh-screen {
+    height: 100dvh;
+  }
+
+  .min-h-dvh-screen {
+    min-height: 100dvh;
+  }
+
+  /* O'quvchi uchun jonli kod: psixologik to'siq (AUDIT.md §F) — xavfsizlik EMAS. */
+  .no-select {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /*
+   * Shisha — DESIGN_GLOW §5: FAQAT modal, FloatingDock, yuqori navigatsiya;
+   * bir vaqtda ko'pi bilan BITTA qatlam; blur <= 16px; animatsiyalanmaydi.
+   * Kartochka, ro'yxat va IDE da ishlatilmaydi.
+   */
+  .glass {
+    background-color: rgb(var(--surface) / 0.72);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background-color: rgb(var(--surface) / 0.96);
+    }
+  }
+
+  /*
+   * Statik aurora — login/onboarding/landing foni (DESIGN_GLOW §5).
+   * 3 ta radial-gradient, ANIMATSIYASIZ. Matn uning USTIDA emas, kartochka ichida.
+   */
+  .aurora {
+    background-color: rgb(var(--bg));
+    background-image:
+      radial-gradient(60% 50% at 12% 8%, rgb(var(--primary) / var(--aurora-a1)), transparent 62%),
+      radial-gradient(45% 40% at 88% 16%, rgb(var(--accent) / var(--aurora-a2)), transparent 60%),
+      radial-gradient(70% 55% at 50% 112%, rgb(var(--primary) / var(--aurora-a3)), transparent 66%);
+    background-attachment: fixed;
+  }
+
+  /*
+   * Tegish maydoni >= 44x44 px (DESIGN_GLOW §5) — VIZUAL o'lchamni o'zgartirmasdan.
+   * Markazlangan ko'rinmas `::after` zich UI dagi kichik tugmalarni ham 44px qiladi.
+   */
+  .hit-44 {
+    position: relative;
+  }
+
+  .hit-44::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--border)) transparent;
+  }
+}
+
+/* Animatsiyani kamaytirish so'rovi: glow (box-shadow) STATIK qoladi, harakat o'chadi. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,43 @@
+# Umumiy lint/format konfiguratsiyasi (lead fayli).
+# Maqsad: 6 ta agent yozgan kod bitta uslubda bo'lsin va CI stil farqidan qizarmasin.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "alembic/versions", "__pycache__"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "UP",        # pyupgrade
+    "B",         # flake8-bugbear
+    "ASYNC",     # async xatolari (blocking call in async def)
+    "S",         # bandit (xavfsizlik)
+    "C4", "SIM", # comprehension / sodda kod
+    "RUF",
+]
+ignore = [
+    "E501",    # satr uzunligi formatter tomonidan boshqariladi
+    "B008",    # FastAPI `Depends()` default argumentda — normal naqsh
+    "S104",    # 0.0.0.0 ga bind — konteynerda normal
+    # O'zbek imlosidagi U+2018/U+2019 (ʻ/') ni ruff "ambiguous unicode" deb bloklaydi.
+    # Kontrakt UI matnlarini o'zbekcha talab qiladi, shuning uchun QOIDA o'chiriladi, matn emas.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106"]   # assert va test sirlariga ruxsat
+# S105 (bandit "hardcoded password") uchun per-file-ignore ATAYLAB qo'yilmagan:
+# `auth-engineer` har bir yolg'on-pozitivga sababi bilan `# noqa: S105` yozgan —
+# bu torroq va o'qiydigan odamga tushunarliroq. Yangi yolg'on-pozitiv chiqsa, shu uslubda.
+"../scripts/*" = ["S101", "S603", "S607"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

@@ -1,0 +1,212 @@
+# SyncClass — lokal dev stack (AUDIT.md §J3: prod Nginx/SSL keyingi bosqich).
+# 6 servis: postgres, redis, backend, worker, frontend, nginx.
+# Barcha ilova sozlamalari `.env` dan keladi (namuna: `.env.example`).
+#
+# HOST portlari `.env` dagi HOST_* o'zgaruvchilari bilan boshqariladi — mashinada
+# o'sha port band bo'lsa faqat `.env` ni o'zgartirish kifoya, compose'ga tegilmaydi:
+#   HOST_HTTP_PORT(80) HOST_FRONTEND_PORT(3000) HOST_API_PORT(8000)
+#   HOST_POSTGRES_PORT(5432) HOST_REDIS_PORT(6379)
+# Konteynerlar O'ZARO har doim ichki portlar bilan gaplashadi (80/3000/8000/5432/6379),
+# shuning uchun HOST_* ni o'zgartirish ilova ishiga ta'sir qilmaydi.
+
+name: syncclass
+
+x-app-env: &app-env
+  env_file:
+    - .env
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  # ------------------------------------------------------------- postgres ----
+  postgres:
+    image: postgres:16-alpine
+    container_name: syncclass-postgres
+    <<: *restart
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-syncclass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-syncclass}
+      POSTGRES_DB: ${POSTGRES_DB:-syncclass}
+      # TIMESTAMPTZ -> UTC (CONTRACTS.md: DB da UTC, UI da Asia/Tashkent)
+      TZ: UTC
+      PGTZ: UTC
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      # Lokal `psql` / DBeaver uchun. HOST tomonidagi port — `HOST_POSTGRES_PORT`.
+      # Konteyner ichidagi `POSTGRES_PORT` dan AJRATILGAN: backend har doim 5432 ga ulanadi.
+      - "${HOST_POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-syncclass} -d ${POSTGRES_DB:-syncclass} -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [syncclass]
+
+  # ---------------------------------------------------------------- redis ----
+  redis:
+    image: redis:7-alpine
+    container_name: syncclass-redis
+    <<: *restart
+    # AOF yoqilgan: room state (Hash) va arq navbati restartda yo'qolmasin (AUDIT.md §B2).
+    # `--save ""` — RDB snapshot o'chirilgan, faqat AOF.
+    # `noeviction` — navbat/room state'ni Redis o'zi o'chirib tashlamasin.
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --save
+      - ""
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${HOST_REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks: [syncclass]
+
+  # -------------------------------------------------------------- backend ----
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    image: syncclass/backend:dev
+    container_name: syncclass-backend
+    <<: [*restart, *app-env]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # AUDIT.md §A3: Starlette `SpooledTemporaryFile` 1 MB dan oshgach /tmp ga yozadi.
+    # /tmp ni tmpfs (RAM) qilib qo'yamiz — o'quvchi fayli diskka tegmaydi.
+    tmpfs:
+      - /tmp
+    volumes:
+      # `scripts/seed.py` va `scripts/loadtest_ws.py` konteyner ichida kerak
+      # (`make seed`, `make loadtest`), lekin image'ga kirmaydi — ular loyiha
+      # ildizidagi scripts/ da turadi va BOSHQA agentlarning fayllari.
+      # DIQQAT: `docker compose cp ... backend:/tmp/...` ISHLAMAYDI — /tmp tmpfs
+      # mount, docker cp esa mount OSTIDAGI qatlamga yozadi va fayl ko'rinmaydi.
+      - ./scripts:/scripts:ro
+    ports:
+      # To'g'ridan-to'g'ri backend (Nginx'ni chetlab) — faqat debug uchun.
+      - "${HOST_API_PORT:-8000}:8000"
+    networks: [syncclass]
+
+  # --------------------------------------------------------------- worker ----
+  worker:
+    # Backend bilan BIR XIL image — alohida build qilinmaydi.
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runtime
+    image: syncclass/backend:dev
+    container_name: syncclass-worker
+    <<: [*restart, *app-env]
+    # Migratsiyani FAQAT backend bajaradi; worker tayyor sxemani kutadi.
+    command: ["arq", "app.worker.WorkerSettings"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    tmpfs:
+      - /tmp
+    healthcheck:
+      # arq HTTP port ochmaydi — Redis'ga ulanish qobiliyatini tekshiramiz.
+      # REDIS_URL `settings` orqali o'qiladi (config.py qoidasi: `os.environ` ga
+      # to'g'ridan-to'g'ri murojaat qilinmaydi).
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import redis; from app.core.config import settings;
+          redis.Redis.from_url(settings.REDIS_URL).ping()"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [syncclass]
+
+  # ------------------------------------------------------------- frontend ----
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        # NEXT_PUBLIC_* build vaqtida bundle'ga kiradi, runtime'da o'zgarmaydi.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost/api/v1}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost/ws}
+        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL:-}
+    image: syncclass/frontend:dev
+    container_name: syncclass-frontend
+    <<: *restart
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      backend:
+        condition: service_healthy
+    tmpfs:
+      - /tmp
+    ports:
+      # To'g'ridan-to'g'ri frontend (Nginx'ni chetlab) — faqat debug uchun.
+      - "${HOST_FRONTEND_PORT:-3000}:3000"
+    networks: [syncclass]
+
+  # ---------------------------------------------------------------- nginx ----
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: syncclass-nginx
+    <<: *restart
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    ports:
+      # Ilovaning ASOSIY kirish nuqtasi.
+      - "${HOST_HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    # AUDIT.md §A3.1: Nginx body ni `client_body_temp_path` ga (diskka) buferlaydi.
+    # `proxy_request_buffering off` dan tashqari qo'shimcha himoya: temp papkalar ham RAM da.
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    networks: [syncclass]
+
+volumes:
+  pg_data:
+    name: syncclass_pg_data
+  redis_data:
+    name: syncclass_redis_data
+
+networks:
+  syncclass:
+    name: syncclass
+    driver: bridge
