@@ -199,6 +199,13 @@ POST | `/auth/refresh` | `{refresh_token}` → `{access_token, refresh_token, to
 POST | `/auth/logout` | refresh ni revoke
 GET | `/auth/me` | `UserOut`
 POST | `/auth/onboarding` | `{full_name, group_id?|invite_code?}` → `UserOut`. ⚠️ `role` **o'qilmaydi**
+POST | `/auth/register` | `{email, password, full_name}` → `TokenPair` (201). Yangi hisob **har doim STUDENT**. Band email → 400 `EMAIL_TAKEN`
+POST | `/auth/password-login` | `{email, password}` → `TokenPair`. Xato → 401 `INVALID_CREDENTIALS` (enumeration yo'q); 5 xato → 5 daqiqa qulf
+
+⚠️ Mahsulot qarori (egasining talabi): parol **ochiq** saqlanadi (`users.password_plain`)
+va faqat ADMIN javoblarida (`/users`) qaytadi — o'quvchi unutsa admin aytib beradi.
+Adminka: `PUT /users/{id}/password` `{password}` → `AdminUserOut` (parol o'rnatish/almashtirish,
+`token_version` oshirilmaydi).
 
 `UserOut = {id, email, full_name, avatar_url, role, is_onboarded, xp_points, groups:[GroupBrief]}`
 

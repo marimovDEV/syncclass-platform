@@ -278,6 +278,8 @@ export const ERROR_CODE_LABELS: Record<string, string> = {
   ONBOARDING_REQUIRED: 'Avval profilingizni to’ldiring.',
   INVALID_OAUTH_STATE: 'Kirish sessiyasi eskirdi. Qaytadan urinib ko’ring.',
   RATE_LIMITED: 'Juda tez-tez urinyapsiz. Biroz kutib, qayta urinib ko’ring.',
+  INVALID_CREDENTIALS: 'Email yoki parol noto’g’ri.',
+  EMAIL_TAKEN: 'Bu email allaqachon ro’yxatdan o’tgan. «Kirish» bo’limidan kiring.',
 
   /* --- OAuth callback (#error=...) --- */
   GOOGLE_DENIED: 'Google orqali kirishga ruxsat berilmadi.',

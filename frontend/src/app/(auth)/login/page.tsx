@@ -4,10 +4,18 @@ import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ApiError } from '@/lib/api';
-import { devLogin, fetchGoogleAuthorizeUrl, postLoginPath, useSession } from '@/lib/auth';
+import {
+  devLogin,
+  fetchGoogleAuthorizeUrl,
+  passwordLogin,
+  postLoginPath,
+  registerAccount,
+  useSession,
+} from '@/lib/auth';
 import { errorText } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { ErrorState, LoadingState } from '@/components/shared/states';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 
@@ -72,6 +80,13 @@ function LoginView() {
   const [devLoadingEmail, setDevLoadingEmail] = React.useState<string | null>(null);
   const [error, setError] = React.useState<unknown>(null);
 
+  // Email + parol oqimi. 'login' — mavjud hisob, 'register' — yangi (STUDENT).
+  const [mode, setMode] = React.useState<'login' | 'register'>('login');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [fullName, setFullName] = React.useState('');
+  const [formPending, setFormPending] = React.useState(false);
+
   const nextPath = searchParams.get('next');
   const callbackError = searchParams.get('error');
 
@@ -94,6 +109,25 @@ function LoginView() {
       }
     },
     [nextPath, router],
+  );
+
+  const handlePasswordSubmit = React.useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      setError(null);
+      setFormPending(true);
+      try {
+        const u =
+          mode === 'register'
+            ? await registerAccount(email.trim(), password, fullName.trim())
+            : await passwordLogin(email.trim(), password);
+        router.replace(nextPath && nextPath.startsWith('/') ? nextPath : postLoginPath(u));
+      } catch (caught) {
+        setError(caught);
+        setFormPending(false);
+      }
+    },
+    [mode, email, password, fullName, nextPath, router],
   );
 
   const startGoogleLogin = React.useCallback(async () => {
@@ -150,23 +184,90 @@ function LoginView() {
                 </div>
               ) : null}
 
-              {error ? (
-                <ErrorState
-                  className="w-full px-4 py-6"
-                  error={error}
-                  onRetry={() => void startGoogleLogin()}
-                />
-              ) : null}
+              {error ? <ErrorState className="w-full px-4 py-4" error={error} /> : null}
 
               <Button
                 size="xl"
                 block
                 loading={pendingRedirect}
+                disabled={formPending}
                 onClick={() => void startGoogleLogin()}
               >
                 {pendingRedirect ? null : <GoogleMark />}
                 Google orqali davom etish
               </Button>
+
+              <div className="flex w-full items-center gap-2">
+                <div className="h-px flex-1 bg-border/60" />
+                <span className="text-xs uppercase tracking-wider text-muted font-medium">
+                  yoki email bilan
+                </span>
+                <div className="h-px flex-1 bg-border/60" />
+              </div>
+
+              <form
+                className="flex w-full flex-col gap-3"
+                onSubmit={(event) => void handlePasswordSubmit(event)}
+              >
+                {mode === 'register' ? (
+                  <Input
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    placeholder="Ism familiya"
+                    autoComplete="name"
+                    required
+                    minLength={2}
+                    aria-label="Ism familiya"
+                  />
+                ) : null}
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="Email (gmail)"
+                  autoComplete="email"
+                  required
+                  aria-label="Email"
+                />
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Parol"
+                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                  required
+                  minLength={mode === 'register' ? 4 : 1}
+                  aria-label="Parol"
+                />
+                {mode === 'register' ? (
+                  <p className="text-xs text-muted">
+                    ⚠️ Gmail parolingizni <span className="font-medium text-fg">emas</span> — shu
+                    sayt uchun yangi parol o’ylab yozing.
+                  </p>
+                ) : null}
+                <Button
+                  type="submit"
+                  size="lg"
+                  block
+                  variant="outline"
+                  loading={formPending}
+                  disabled={pendingRedirect}
+                >
+                  {mode === 'register' ? 'Ro’yxatdan o’tish' : 'Kirish'}
+                </Button>
+                <button
+                  type="button"
+                  className="text-center text-sm text-primary hover:underline"
+                  onClick={() => {
+                    setMode(mode === 'register' ? 'login' : 'register');
+                    setError(null);
+                  }}
+                >
+                  {mode === 'register'
+                    ? 'Hisobingiz bormi? Kirish'
+                    : 'Hisobingiz yo’qmi? Ro’yxatdan o’tish'}
+                </button>
+              </form>
 
               {DEV_LOGIN_ENABLED ? (
                 <>

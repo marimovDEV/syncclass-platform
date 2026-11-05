@@ -249,3 +249,8 @@ export function listUsers(query = ''): Promise<AdminUser[]> {
 export function setUserRole(id: string, role: UserRole): Promise<AdminUser> {
   return apiFetch<AdminUser>(`/users/${id}/role`, { method: 'PATCH', body: { role } });
 }
+
+/** `PUT /users/{id}/password` (faqat ADMIN) — parol o'rnatish/almashtirish. */
+export function setUserPassword(id: string, password: string): Promise<AdminUser> {
+  return apiFetch<AdminUser>(`/users/${id}/password`, { method: 'PUT', body: { password } });
+}

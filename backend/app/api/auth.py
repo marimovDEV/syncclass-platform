@@ -15,6 +15,7 @@ Xavfsizlik tamoyillari (AUDIT.md §C):
 
 from __future__ import annotations
 
+import hmac
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -64,7 +65,9 @@ from app.schemas.auth import (
     LogoutIn,
     LogoutOut,
     OnboardingIn,
+    PasswordLoginIn,
     RefreshIn,
+    RegisterIn,
     TokenPair,
     UserOut,
 )
@@ -180,6 +183,99 @@ async def dev_login(data: DevLoginIn, db: DbSession) -> TokenPair:
         await db.commit()
         await db.refresh(user)
 
+    tokens = await _issue_pair(db, user)
+    await db.commit()
+    return tokens
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/register va /auth/password-login — email + parol oqimi
+# ---------------------------------------------------------------------------
+#
+# Mahsulot qarori (markaz egasining talabi): o'quvchilar parolni tez-tez
+# unutadi, shuning uchun parol OCHIQ saqlanadi (`users.password_plain`) va
+# adminkada ADMIN'ga ko'rinadi. Frontend foydalanuvchini Gmail parolini EMAS,
+# shu sayt uchun alohida parol yozishga undaydi. Brute-force'dan `check_lockout`
+# + `register_failure` (5 xato → 5 daqiqa qulf) himoya qiladi.
+
+RATE_LIMIT_PASSWORD = (10, 60)
+PWD_SCOPE = "pwdlogin"  # noqa: S105 - Redis scope nomi, sir emas
+
+
+def _password_matches(user: User, password: str) -> bool:
+    if not user.password_plain:
+        return False
+    return hmac.compare_digest(user.password_plain.encode(), password.encode())
+
+
+@router.post(
+    "/register",
+    response_model=TokenPair,
+    status_code=status.HTTP_201_CREATED,
+    summary="Email + parol bilan ro'yxatdan o'tish (yangi hisob — STUDENT)",
+)
+async def register(
+    data: RegisterIn, request: Request, db: DbSession, redis: RedisDep
+) -> TokenPair:
+    limit, window = RATE_LIMIT_PASSWORD
+    await check_rate_limit(redis, "register", _client_ip(request), limit, window)
+
+    existing = await db.scalar(select(User).where(User.email == data.email))
+    if existing is not None:
+        raise bad_request(
+            "EMAIL_TAKEN",
+            "Bu email allaqachon ro'yxatdan o'tgan. «Kirish» bo'limidan kiring.",
+        )
+
+    user = User(
+        email=data.email,
+        google_id=f"pwd_{uuid.uuid4().hex[:12]}",
+        full_name=data.full_name.strip(),
+        role=UserRole.STUDENT,  # AUDIT §C1: yangi hisob har doim STUDENT
+        password_plain=data.password,
+        is_active=True,
+    )
+    db.add(user)
+    try:
+        await db.commit()
+    except IntegrityError:  # parallel ro'yxatdan o'tish poygasi
+        await db.rollback()
+        raise bad_request(
+            "EMAIL_TAKEN",
+            "Bu email allaqachon ro'yxatdan o'tgan. «Kirish» bo'limidan kiring.",
+        ) from None
+    await db.refresh(user)
+
+    tokens = await _issue_pair(db, user)
+    await db.commit()
+    return tokens
+
+
+@router.post(
+    "/password-login",
+    response_model=TokenPair,
+    summary="Email + parol bilan kirish",
+)
+async def password_login(
+    data: PasswordLoginIn, request: Request, db: DbSession, redis: RedisDep
+) -> TokenPair:
+    limit, window = RATE_LIMIT_PASSWORD
+    ip = _client_ip(request)
+    await check_rate_limit(redis, PWD_SCOPE, ip, limit, window)
+
+    email = data.email.strip().lower()
+    lock_key = f"{ip}:{email}"
+    await check_lockout(redis, PWD_SCOPE, lock_key)
+
+    user = await db.scalar(select(User).where(User.email == email))
+    if user is None or not _password_matches(user, data.password):
+        await register_failure(redis, PWD_SCOPE, lock_key)
+        # Hisob bor-yo'qligini oshkor qilmaymiz — bitta umumiy xabar.
+        raise unauthorized("INVALID_CREDENTIALS", "Email yoki parol noto'g'ri.")
+    if not user.is_active:
+        raise forbidden("USER_INACTIVE", "Hisob bloklangan.")
+
+    await clear_failures(redis, PWD_SCOPE, lock_key)
     tokens = await _issue_pair(db, user)
     await db.commit()
     return tokens

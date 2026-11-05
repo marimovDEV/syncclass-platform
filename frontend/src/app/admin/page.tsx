@@ -11,14 +11,15 @@
 
 import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, ShieldCheck } from 'lucide-react';
+import { Dices, Eye, EyeOff, KeyRound, Search, ShieldCheck } from 'lucide-react';
 
 import type { AdminUser, UserRole } from '@/types/api';
 import { isApiError } from '@/lib/api';
 import { useSession } from '@/lib/auth';
 import { errorText, formatDateTime } from '@/lib/format';
 import { queryKeys } from '@/lib/query';
-import { listUsers, setUserRole } from '@/lib/resources';
+import { listUsers, setUserPassword, setUserRole } from '@/lib/resources';
+import { Button } from '@/components/ui/button';
 import { AppShell } from '@/components/shared/AppShell';
 import { EmptyState, ErrorState, LoadingState } from '@/components/shared/states';
 import { UserAvatar } from '@/components/ui/avatar';
@@ -75,6 +76,24 @@ function UsersPanel() {
     placeholderData: (previous) => previous,
   });
 
+  const changePassword = useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) =>
+      setUserPassword(id, password),
+    onSuccess: (updated) => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      toast.success(`${updated.full_name} uchun yangi parol saqlandi`, {
+        description: `Parol: ${updated.password_plain ?? ''} — o'quvchiga ayting.`,
+      });
+    },
+    onError: (caught) => {
+      toast.error("Parolni saqlab bo'lmadi", {
+        description: isApiError(caught)
+          ? errorText(caught.code, caught.message)
+          : "Qayta urinib ko'ring.",
+      });
+    },
+  });
+
   const changeRole = useMutation({
     mutationFn: ({ id, role }: { id: string; role: UserRole }) => setUserRole(id, role),
     onSuccess: (updated) => {
@@ -126,7 +145,11 @@ function UsersPanel() {
                 user={user}
                 isSelf={me?.id === user.id}
                 saving={changeRole.isPending && changeRole.variables?.id === user.id}
+                passwordSaving={
+                  changePassword.isPending && changePassword.variables?.id === user.id
+                }
                 onRoleChange={(role) => changeRole.mutate({ id: user.id, role })}
+                onPasswordSave={(password) => changePassword.mutate({ id: user.id, password })}
               />
             </li>
           ))}
@@ -136,17 +159,44 @@ function UsersPanel() {
   );
 }
 
+/** Esda qoladigan tasodifiy parol: so'z + 2 xona raqam + so'z (masalan, "olma-42-kitob"). */
+const PW_WORDS = [
+  'olma', 'anor', 'uzum', 'kitob', 'daftar', 'qalam', 'quyosh', 'yulduz',
+  'daryo', 'togʻ', 'bahor', 'lola', 'asal', 'chinor', 'kamalak', 'bulut',
+];
+
+function generatePassword(): string {
+  const pick = () => PW_WORDS[Math.floor(Math.random() * PW_WORDS.length)];
+  return `${pick()}-${10 + Math.floor(Math.random() * 90)}-${pick()}`;
+}
+
 function UserRow({
   user,
   isSelf,
   saving,
+  passwordSaving,
   onRoleChange,
+  onPasswordSave,
 }: {
   user: AdminUser;
   isSelf: boolean;
   saving: boolean;
+  passwordSaving: boolean;
   onRoleChange: (role: UserRole) => void;
+  onPasswordSave: (password: string) => void;
 }) {
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState('');
+
+  const savePassword = () => {
+    const value = draft.trim();
+    if (value.length < 4) return;
+    onPasswordSave(value);
+    setEditing(false);
+    setShowPassword(true);
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface p-3">
       <UserAvatar fullName={user.full_name} avatarUrl={user.avatar_url} className="size-9" />
@@ -157,6 +207,75 @@ function UserRow({
           {isSelf ? <span className="ml-1.5 text-xs text-muted">(siz)</span> : null}
         </p>
         <p className="truncate text-xs text-muted">{user.email}</p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted">
+          <KeyRound className="size-3 shrink-0" aria-hidden />
+          {user.password_plain ? (
+            <>
+              <span className="font-mono text-fg">
+                {showPassword ? user.password_plain : '••••••••'}
+              </span>
+              <button
+                type="button"
+                className="text-muted hover:text-fg"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Parolni yashirish' : "Parolni ko'rsatish"}
+              >
+                {showPassword ? (
+                  <EyeOff className="size-3.5" aria-hidden />
+                ) : (
+                  <Eye className="size-3.5" aria-hidden />
+                )}
+              </button>
+            </>
+          ) : (
+            <span>parol qo’yilmagan (Google orqali kiradi)</span>
+          )}
+          <button
+            type="button"
+            className="text-primary hover:underline"
+            onClick={() => {
+              setEditing((v) => !v);
+              setDraft('');
+            }}
+          >
+            {user.password_plain ? 'almashtirish' : 'parol berish'}
+          </button>
+        </p>
+        {editing ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Yangi parol (kamida 4 belgi)"
+              className="h-8 w-56 text-sm"
+              aria-label={`${user.full_name} uchun yangi parol`}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  savePassword();
+                }
+              }}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              onClick={() => setDraft(generatePassword())}
+            >
+              <Dices className="size-3.5" aria-hidden />
+              Tasodifiy
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              loading={passwordSaving}
+              disabled={draft.trim().length < 4}
+              onClick={savePassword}
+            >
+              Saqlash
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <Badge variant={ROLE_BADGE[user.role]} className="shrink-0">

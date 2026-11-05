@@ -147,6 +147,10 @@ class User(TimestampMixin, Base):
     token_version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )
+    # Mahsulot qarori (egasining talabi): parol ochiq saqlanadi va adminkada
+    # ko'rinadi — o'quvchi unutsa admin aytib beradi. Login formasi foydalanuvchini
+    # Gmail parolini EMAS, alohida parol yozishga undaydi.
+    password_plain: Mapped[str | None] = mapped_column(String(128), nullable=True)
     xp_points: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )

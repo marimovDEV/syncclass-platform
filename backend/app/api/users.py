@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
 
 from app.core.deps import DbSession, require_admin
@@ -46,10 +46,18 @@ class AdminUserOut(BaseModel):
     is_active: bool
     is_onboarded: bool
     created_at: datetime
+    #: Mahsulot qarori: parol ochiq saqlanadi va faqat shu ADMIN javobida
+    #: qaytadi — o'quvchi unutsa admin aytib beradi. `None` — parol yo'q
+    #: (faqat Google orqali kiradi).
+    password_plain: str | None = None
 
 
 class RoleUpdateIn(BaseModel):
     role: UserRole
+
+
+class PasswordSetIn(BaseModel):
+    password: str = Field(min_length=4, max_length=128)
 
 
 @router.get("", response_model=list[AdminUserOut])
@@ -89,4 +97,28 @@ async def set_role(
         user.token_version += 1
         await db.commit()
         await db.refresh(user)
+    return user
+
+
+@router.put("/{user_id}/password", response_model=AdminUserOut)
+async def set_password(
+    user_id: uuid.UUID,
+    data: PasswordSetIn,
+    _admin: AdminUser,
+    db: DbSession,
+) -> User:
+    """Parol o'rnatish/almashtirish (faqat ADMIN).
+
+    `token_version` ATAYLAB oshirilmaydi: parol almashtirish — kirishni
+    tiklash vositasi, mavjud sessiyalarni (masalan, darsdagi o'quvchini)
+    uzish emas. Sessiyalarni uzish kerak bo'lsa rol oqimi yoki
+    `logout all_devices` bor.
+    """
+    user = await db.get(User, user_id)
+    if user is None:
+        raise not_found("USER_NOT_FOUND", "Bunday foydalanuvchi yo'q.")
+
+    user.password_plain = data.password
+    await db.commit()
+    await db.refresh(user)
     return user

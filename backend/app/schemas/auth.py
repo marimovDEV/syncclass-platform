@@ -39,6 +39,32 @@ class DevLoginIn(BaseModel):
     email: str = Field(default="teacher@syncclass.local", max_length=255)
 
 
+class PasswordLoginIn(BaseModel):
+    """`POST /auth/password-login` — email + parol bilan kirish."""
+
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class RegisterIn(BaseModel):
+    """`POST /auth/register` — email + parol bilan ro'yxatdan o'tish.
+
+    Yangi hisob HAR DOIM `STUDENT` (AUDIT.md §C1) — `role` maydoni yo'q.
+    """
+
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=4, max_length=128)
+    full_name: str = Field(min_length=2, max_length=255)
+
+    @field_validator("email")
+    @classmethod
+    def _email_shape(cls, value: str) -> str:
+        email = value.strip().lower()
+        if "@" not in email or "." not in email.split("@")[-1]:
+            raise ValueError("Email noto'g'ri ko'rinishda.")
+        return email
+
+
 class RefreshIn(BaseModel):
     refresh_token: str = Field(min_length=10, max_length=4096)
 

@@ -44,6 +44,30 @@ export async function devLogin(email: string): Promise<UserOut> {
   return fetchMe();
 }
 
+/** `POST /auth/password-login` — email + parol bilan kirish. */
+export async function passwordLogin(email: string, password: string): Promise<UserOut> {
+  const tokens = await apiFetch<{ access_token: string; refresh_token: string }>(
+    '/auth/password-login',
+    { method: 'POST', body: { email, password }, skipAuth: true },
+  );
+  setTokens(tokens.access_token, tokens.refresh_token);
+  return fetchMe();
+}
+
+/** `POST /auth/register` — email + parol bilan yangi hisob (har doim STUDENT). */
+export async function registerAccount(
+  email: string,
+  password: string,
+  fullName: string,
+): Promise<UserOut> {
+  const tokens = await apiFetch<{ access_token: string; refresh_token: string }>(
+    '/auth/register',
+    { method: 'POST', body: { email, password, full_name: fullName }, skipAuth: true },
+  );
+  setTokens(tokens.access_token, tokens.refresh_token);
+  return fetchMe();
+}
+
 /** `GET /auth/me` → `UserOut`. */
 export function fetchMe(): Promise<UserOut> {
   return apiFetch<UserOut>('/auth/me');

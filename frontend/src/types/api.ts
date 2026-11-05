@@ -1334,4 +1334,7 @@ export interface AdminUser {
   is_active: boolean;
   is_onboarded: boolean;
   created_at: string;
+  /** Ochiq parol (mahsulot qarori — o'quvchi unutsa admin aytib beradi).
+   *  `null` — parol qo'yilmagan (faqat Google orqali kiradi). */
+  password_plain: string | null;
 }
