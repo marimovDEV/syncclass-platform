@@ -224,7 +224,10 @@ async def google_login(request: Request, redis: RedisDep) -> GoogleLoginOut:
 
 async def _exchange_code(code: str) -> dict[str, object]:
     """Authorization code → tokenlar. Tarmoq xatosi `None` emas, exception beradi."""
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    # retries=2 — faqat ulanish bosqichidagi xatolarni (DNS, connect) qaytaradi;
+    # yuborilgan so'rov takrorlanmaydi, shuning uchun token exchange xavfsiz.
+    transport = httpx.AsyncHTTPTransport(retries=2)
+    async with httpx.AsyncClient(timeout=15.0, transport=transport) as client:
         response = await client.post(
             GOOGLE_TOKEN_ENDPOINT,
             data={
@@ -278,14 +281,15 @@ class _HttpxTransport(google_transport.Request):
         timeout: float | None = 20.0,
         **kwargs: object,
     ) -> _HttpxResponse:
-        response = httpx.request(
-            method,
-            url,
-            content=body,
-            headers=headers,
-            timeout=timeout or 20.0,
-            follow_redirects=True,
-        )
+        with httpx.Client(transport=httpx.HTTPTransport(retries=2)) as client:
+            response = client.request(
+                method,
+                url,
+                content=body,
+                headers=headers,
+                timeout=timeout or 20.0,
+                follow_redirects=True,
+            )
         return _HttpxResponse(response)
 
 
