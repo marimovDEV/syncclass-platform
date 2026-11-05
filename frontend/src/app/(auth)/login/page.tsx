@@ -239,12 +239,6 @@ function LoginView() {
                   minLength={mode === 'register' ? 4 : 1}
                   aria-label="Parol"
                 />
-                {mode === 'register' ? (
-                  <p className="text-xs text-muted">
-                    ⚠️ Gmail parolingizni <span className="font-medium text-fg">emas</span> — shu
-                    sayt uchun yangi parol o’ylab yozing.
-                  </p>
-                ) : null}
                 <Button
                   type="submit"
                   size="lg"
