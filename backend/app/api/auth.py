@@ -16,7 +16,10 @@ Xavfsizlik tamoyillari (AUDIT.md §C):
 from __future__ import annotations
 
 import hmac
+import json
 import logging
+import secrets
+import smtplib
 import uuid
 from datetime import UTC, datetime
 from urllib.parse import urlencode
@@ -67,10 +70,12 @@ from app.schemas.auth import (
     OnboardingIn,
     PasswordLoginIn,
     RefreshIn,
+    RegisterConfirmIn,
     RegisterIn,
     TokenPair,
     UserOut,
 )
+from app.services.email import send_verification_code
 from app.services.room_state import atomic_getdel
 
 log = logging.getLogger("syncclass.auth")
@@ -201,6 +206,11 @@ async def dev_login(data: DevLoginIn, db: DbSession) -> TokenPair:
 RATE_LIMIT_PASSWORD = (10, 60)
 PWD_SCOPE = "pwdlogin"  # noqa: S105 - Redis scope nomi, sir emas
 
+#: Kutilayotgan ro'yxatdan o'tish (kod + ma'lumotlar), 10 daqiqa.
+REG_CODE_KEY = "regcode:{email}"
+REG_CODE_TTL_SEC = 600
+REG_SCOPE = "regcode"
+
 
 def _password_matches(user: User, password: str) -> bool:
     if not user.password_plain:
@@ -208,25 +218,8 @@ def _password_matches(user: User, password: str) -> bool:
     return hmac.compare_digest(user.password_plain.encode(), password.encode())
 
 
-@router.post(
-    "/register",
-    response_model=TokenPair,
-    status_code=status.HTTP_201_CREATED,
-    summary="Email + parol bilan ro'yxatdan o'tish (yangi hisob — STUDENT)",
-)
-async def register(
-    data: RegisterIn, request: Request, db: DbSession, redis: RedisDep
-) -> TokenPair:
-    limit, window = RATE_LIMIT_PASSWORD
-    await check_rate_limit(redis, "register", _client_ip(request), limit, window)
-
-    existing = await db.scalar(select(User).where(User.email == data.email))
-    if existing is not None:
-        raise bad_request(
-            "EMAIL_TAKEN",
-            "Bu email allaqachon ro'yxatdan o'tgan. «Kirish» bo'limidan kiring.",
-        )
-
+async def _create_password_user(db: AsyncSession, data: RegisterIn) -> User:
+    """Yangi STUDENT hisob (poyga xavfsiz: unique email → EMAIL_TAKEN)."""
     user = User(
         email=data.email,
         google_id=f"pwd_{uuid.uuid4().hex[:12]}",
@@ -245,7 +238,91 @@ async def register(
             "Bu email allaqachon ro'yxatdan o'tgan. «Kirish» bo'limidan kiring.",
         ) from None
     await db.refresh(user)
+    return user
 
+
+@router.post(
+    "/register",
+    response_model=None,
+    summary="Email + parol bilan ro'yxatdan o'tish (yangi hisob — STUDENT)",
+)
+async def register(
+    data: RegisterIn, request: Request, db: DbSession, redis: RedisDep
+) -> dict[str, str] | TokenPair:
+    """SMTP sozlangan bo'lsa emailga 6 xonali kod yuboriladi va
+    `{"status": "code_sent"}` qaytadi — hisob `POST /auth/register/confirm`
+    da yaratiladi (email egaligini tasdiqlash). SMTP yo'q bo'lsa hisob
+    darhol yaratiladi va `TokenPair` qaytadi.
+
+    Kodni qayta yuborish — shu endpointni qayta chaqirish (rate limit ichida).
+    """
+    limit, window = RATE_LIMIT_PASSWORD
+    await check_rate_limit(redis, "register", _client_ip(request), limit, window)
+
+    existing = await db.scalar(select(User).where(User.email == data.email))
+    if existing is not None:
+        raise bad_request(
+            "EMAIL_TAKEN",
+            "Bu email allaqachon ro'yxatdan o'tgan. «Kirish» bo'limidan kiring.",
+        )
+
+    if not settings.email_verification_enabled:
+        user = await _create_password_user(db, data)
+        tokens = await _issue_pair(db, user)
+        await db.commit()
+        return tokens
+
+    code = f"{secrets.randbelow(10**6):06d}"
+    payload = json.dumps(
+        {"code": code, "password": data.password, "full_name": data.full_name.strip()}
+    )
+    await redis.set(REG_CODE_KEY.format(email=data.email), payload, ex=REG_CODE_TTL_SEC)
+    try:
+        await send_verification_code(data.email, code)
+    except (OSError, smtplib.SMTPException) as exc:
+        log.warning("Tasdiqlash kodi yuborilmadi (%s): %s", data.email, exc)
+        raise bad_request(
+            "EMAIL_SEND_FAILED",
+            "Kod yuborib bo'lmadi. Email manzilini tekshirib, qayta urinib ko'ring.",
+        ) from None
+    return {"status": "code_sent"}
+
+
+@router.post(
+    "/register/confirm",
+    response_model=TokenPair,
+    status_code=status.HTTP_201_CREATED,
+    summary="Emailga yuborilgan kodni tasdiqlash → hisob yaratiladi",
+)
+async def register_confirm(
+    data: RegisterConfirmIn, request: Request, db: DbSession, redis: RedisDep
+) -> TokenPair:
+    limit, window = RATE_LIMIT_PASSWORD
+    await check_rate_limit(redis, "regconfirm", _client_ip(request), limit, window)
+    await check_lockout(redis, REG_SCOPE, data.email)
+
+    raw = await redis.get(REG_CODE_KEY.format(email=data.email))
+    if raw is None:
+        raise bad_request(
+            "CODE_EXPIRED", "Kod muddati o'tgan yoki so'ralmagan. Qaytadan ro'yxatdan o'ting."
+        )
+    pending = json.loads(raw if isinstance(raw, str) else raw.decode())
+
+    if not hmac.compare_digest(str(pending["code"]), data.code.strip()):
+        failures = await register_failure(redis, REG_SCOPE, data.email)
+        if failures >= 5:
+            await redis.delete(REG_CODE_KEY.format(email=data.email))
+        raise bad_request("INVALID_CODE", "Kod noto'g'ri. Qaytadan tekshirib yozing.")
+
+    await redis.delete(REG_CODE_KEY.format(email=data.email))
+    await clear_failures(redis, REG_SCOPE, data.email)
+
+    user = await _create_password_user(
+        db,
+        RegisterIn(
+            email=data.email, password=pending["password"], full_name=pending["full_name"]
+        ),
+    )
     tokens = await _issue_pair(db, user)
     await db.commit()
     return tokens

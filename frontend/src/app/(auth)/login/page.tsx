@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { ApiError } from '@/lib/api';
 import {
+  confirmRegister,
   devLogin,
   fetchGoogleAuthorizeUrl,
   passwordLogin,
@@ -12,6 +13,7 @@ import {
   registerAccount,
   useSession,
 } from '@/lib/auth';
+import { toast } from '@/components/ui/toast';
 import { errorText } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -86,6 +88,9 @@ function LoginView() {
   const [password, setPassword] = React.useState('');
   const [fullName, setFullName] = React.useState('');
   const [formPending, setFormPending] = React.useState(false);
+  // Email tasdiqlash bosqichi (server SMTP sozlangan bo'lsa kod so'raydi).
+  const [codeStep, setCodeStep] = React.useState(false);
+  const [code, setCode] = React.useState('');
 
   const nextPath = searchParams.get('next');
   const callbackError = searchParams.get('error');
@@ -117,10 +122,20 @@ function LoginView() {
       setError(null);
       setFormPending(true);
       try {
-        const u =
-          mode === 'register'
-            ? await registerAccount(email.trim(), password, fullName.trim())
-            : await passwordLogin(email.trim(), password);
+        if (mode === 'register') {
+          const result = await registerAccount(email.trim(), password, fullName.trim());
+          if (result === 'code_sent') {
+            setCodeStep(true);
+            setCode('');
+            setFormPending(false);
+            return;
+          }
+          router.replace(
+            nextPath && nextPath.startsWith('/') ? nextPath : postLoginPath(result),
+          );
+          return;
+        }
+        const u = await passwordLogin(email.trim(), password);
         router.replace(nextPath && nextPath.startsWith('/') ? nextPath : postLoginPath(u));
       } catch (caught) {
         setError(caught);
@@ -129,6 +144,32 @@ function LoginView() {
     },
     [mode, email, password, fullName, nextPath, router],
   );
+
+  const handleCodeSubmit = React.useCallback(
+    async (event: React.FormEvent) => {
+      event.preventDefault();
+      setError(null);
+      setFormPending(true);
+      try {
+        const u = await confirmRegister(email.trim(), code.trim());
+        router.replace(nextPath && nextPath.startsWith('/') ? nextPath : postLoginPath(u));
+      } catch (caught) {
+        setError(caught);
+        setFormPending(false);
+      }
+    },
+    [email, code, nextPath, router],
+  );
+
+  const resendCode = React.useCallback(async () => {
+    setError(null);
+    try {
+      await registerAccount(email.trim(), password, fullName.trim());
+      toast.success('Kod qayta yuborildi', { description: email.trim() });
+    } catch (caught) {
+      setError(caught);
+    }
+  }, [email, password, fullName]);
 
   const startGoogleLogin = React.useCallback(async () => {
     setError(null);
@@ -205,6 +246,57 @@ function LoginView() {
                 <div className="h-px flex-1 bg-border/60" />
               </div>
 
+              {codeStep ? (
+                <form
+                  className="flex w-full flex-col gap-3"
+                  onSubmit={(event) => void handleCodeSubmit(event)}
+                >
+                  <p className="text-center text-sm text-muted">
+                    <span className="font-medium text-fg">{email.trim()}</span> manziliga 6
+                    xonali tasdiqlash kodi yubordik. Pochtangizni tekshiring (Spam ham).
+                  </p>
+                  <Input
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={code}
+                    onChange={(event) => setCode(event.target.value)}
+                    placeholder="______"
+                    maxLength={6}
+                    required
+                    className="text-center font-mono text-lg tracking-[0.5em]"
+                    aria-label="Tasdiqlash kodi"
+                    autoFocus
+                  />
+                  <Button
+                    type="submit"
+                    size="lg"
+                    block
+                    loading={formPending}
+                    disabled={code.trim().length < 6}
+                  >
+                    Tasdiqlash
+                  </Button>
+                  <div className="flex items-center justify-center gap-4 text-sm">
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => void resendCode()}
+                    >
+                      Kodni qayta yuborish
+                    </button>
+                    <button
+                      type="button"
+                      className="text-muted hover:text-fg hover:underline"
+                      onClick={() => {
+                        setCodeStep(false);
+                        setError(null);
+                      }}
+                    >
+                      Orqaga
+                    </button>
+                  </div>
+                </form>
+              ) : (
               <form
                 className="flex w-full flex-col gap-3"
                 onSubmit={(event) => void handlePasswordSubmit(event)}
@@ -262,6 +354,7 @@ function LoginView() {
                     : 'Hisobingiz yo’qmi? Ro’yxatdan o’tish'}
                 </button>
               </form>
+              )}
 
               {DEV_LOGIN_ENABLED ? (
                 <>

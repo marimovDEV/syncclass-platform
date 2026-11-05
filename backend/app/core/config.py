@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
+
+    # --- Email (ro'yxatdan o'tishda tasdiqlash kodi) ---
+    # Bo'sh bo'lsa tasdiqlash O'CHIQ: ro'yxatdan o'tish kodsiz ishlayveradi.
+    # Gmail uchun: SMTP_USER = gmail manzil, SMTP_PASSWORD = App parol
+    # (myaccount.google.com/apppasswords, oddiy parol EMAS).
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""  # bo'sh bo'lsa SMTP_USER ishlatiladi
     # Faqat shu email'lar TEACHER bo'lib ro'yxatdan o'tadi (AUDIT.md §C1).
     # `NoDecode` SHART: pydantic-settings murakkab tipni dotenv manbasida JSON deb
     # dekod qilishga urinadi va validatordan OLDIN yiqiladi. `NoDecode` bilan xom
@@ -135,6 +145,11 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.FRONTEND_ORIGIN.split(",") if o.strip()]
+
+    @property
+    def email_verification_enabled(self) -> bool:
+        """SMTP sozlanmagan bo'lsa ro'yxatdan o'tish kodsiz ishlaydi (sayt yiqilmasin)."""
+        return bool(self.SMTP_USER and self.SMTP_PASSWORD)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

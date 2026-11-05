@@ -65,6 +65,18 @@ class RegisterIn(BaseModel):
         return email
 
 
+class RegisterConfirmIn(BaseModel):
+    """`POST /auth/register/confirm` — emailga yuborilgan 6 xonali kod."""
+
+    email: str = Field(min_length=3, max_length=255)
+    code: str = Field(min_length=4, max_length=10)
+
+    @field_validator("email")
+    @classmethod
+    def _email_lower(cls, value: str) -> str:
+        return value.strip().lower()
+
+
 class RefreshIn(BaseModel):
     refresh_token: str = Field(min_length=10, max_length=4096)
 

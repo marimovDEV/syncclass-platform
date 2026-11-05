@@ -87,7 +87,7 @@ async def test_register_then_login(client):
             f"{API}/auth/register",
             json={"email": email, "password": "olma-2024", "full_name": "Pwd Test"},
         )
-        assert r.status_code == 201, r.text
+        assert r.status_code == 200, r.text
         assert r.json()["access_token"]
 
         # Yangi hisob — STUDENT va parol saqlangan.
@@ -116,7 +116,7 @@ async def test_register_duplicate_email(client):
     email = _email()
     body = {"email": email, "password": "parol-1", "full_name": "Birinchi"}
     try:
-        assert (await client.post(f"{API}/auth/register", json=body)).status_code == 201
+        assert (await client.post(f"{API}/auth/register", json=body)).status_code == 200
         r = await client.post(f"{API}/auth/register", json=body)
         assert r.status_code == 400
         assert r.json()["detail"]["code"] == "EMAIL_TAKEN"
@@ -199,6 +199,63 @@ async def test_admin_sets_password_and_sees_it(client):
         assert r.status_code == 200
     finally:
         await _drop_by_email(email, admin_email)
+
+
+async def test_register_with_email_verification(client, monkeypatch):
+    """SMTP sozlangan rejim: kod yuboriladi, hisob faqat to'g'ri koddan keyin ochiladi."""
+    from app.api import auth as auth_module
+    from app.core.config import settings
+
+    sent: dict[str, str] = {}
+
+    async def fake_send(to: str, code: str) -> None:
+        sent["to"], sent["code"] = to, code
+
+    monkeypatch.setattr(settings, "SMTP_USER", "noreply@syncclass.test")
+    monkeypatch.setattr(settings, "SMTP_PASSWORD", "app-parol")
+    monkeypatch.setattr(auth_module, "send_verification_code", fake_send)
+
+    email = _email()
+    try:
+        r = await client.post(
+            f"{API}/auth/register",
+            json={"email": email, "password": "kod-bilan", "full_name": "Kod Test"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json() == {"status": "code_sent"}
+        assert sent["to"] == email and len(sent["code"]) == 6
+
+        # Hisob HALI yaratilmagan.
+        async with AsyncSessionLocal() as session:
+            assert await session.scalar(select(User).where(User.email == email)) is None
+
+        # Noto'g'ri kod — 400, hisob yo'q.
+        r = await client.post(
+            f"{API}/auth/register/confirm", json={"email": email, "code": "000000"}
+        )
+        assert r.status_code == 400
+        assert r.json()["detail"]["code"] == "INVALID_CODE"
+
+        # To'g'ri kod — 201 + tokenlar, hisob STUDENT va parol saqlangan.
+        r = await client.post(
+            f"{API}/auth/register/confirm", json={"email": email, "code": sent["code"]}
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["access_token"]
+        async with AsyncSessionLocal() as session:
+            user = await session.scalar(select(User).where(User.email == email))
+            assert user is not None
+            assert user.role is UserRole.STUDENT
+            assert user.password_plain == "kod-bilan"
+
+        # Kod bir martalik: qayta ishlatib bo'lmaydi.
+        r = await client.post(
+            f"{API}/auth/register/confirm", json={"email": email, "code": sent["code"]}
+        )
+        assert r.status_code == 400
+        assert r.json()["detail"]["code"] == "CODE_EXPIRED"
+    finally:
+        await _drop_by_email(email)
 
 
 async def test_lockout_after_failures(client):

@@ -199,7 +199,8 @@ POST | `/auth/refresh` | `{refresh_token}` → `{access_token, refresh_token, to
 POST | `/auth/logout` | refresh ni revoke
 GET | `/auth/me` | `UserOut`
 POST | `/auth/onboarding` | `{full_name, group_id?|invite_code?}` → `UserOut`. ⚠️ `role` **o'qilmaydi**
-POST | `/auth/register` | `{email, password, full_name}` → `TokenPair` (201). Yangi hisob **har doim STUDENT**. Band email → 400 `EMAIL_TAKEN`
+POST | `/auth/register` | `{email, password, full_name}`. SMTP sozlangan bo'lsa emailga 6 xonali kod ketadi → `{status:"code_sent"}`; aks holda darhol `TokenPair`. Yangi hisob **har doim STUDENT**. Band email → 400 `EMAIL_TAKEN`
+POST | `/auth/register/confirm` | `{email, code}` → `TokenPair` (201). Xato kod → 400 `INVALID_CODE` (5 xato → qulf); muddati o'tgan → 400 `CODE_EXPIRED`. Kod Redis da 10 daqiqa, bir martalik
 POST | `/auth/password-login` | `{email, password}` → `TokenPair`. Xato → 401 `INVALID_CREDENTIALS` (enumeration yo'q); 5 xato → 5 daqiqa qulf
 
 ⚠️ Mahsulot qarori (egasining talabi): parol **ochiq** saqlanadi (`users.password_plain`)

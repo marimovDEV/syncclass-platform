@@ -280,6 +280,9 @@ export const ERROR_CODE_LABELS: Record<string, string> = {
   RATE_LIMITED: 'Juda tez-tez urinyapsiz. Biroz kutib, qayta urinib ko’ring.',
   INVALID_CREDENTIALS: 'Email yoki parol noto’g’ri.',
   EMAIL_TAKEN: 'Bu email allaqachon ro’yxatdan o’tgan. «Kirish» bo’limidan kiring.',
+  INVALID_CODE: 'Kod noto’g’ri. Qaytadan tekshirib yozing.',
+  CODE_EXPIRED: 'Kod muddati o’tgan. Qaytadan ro’yxatdan o’ting.',
+  EMAIL_SEND_FAILED: 'Kod yuborib bo’lmadi. Email manzilini tekshirib, qayta urinib ko’ring.',
 
   /* --- OAuth callback (#error=...) --- */
   GOOGLE_DENIED: 'Google orqali kirishga ruxsat berilmadi.',

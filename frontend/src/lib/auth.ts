@@ -54,15 +54,39 @@ export async function passwordLogin(email: string, password: string): Promise<Us
   return fetchMe();
 }
 
-/** `POST /auth/register` — email + parol bilan yangi hisob (har doim STUDENT). */
+/**
+ * `POST /auth/register` — email + parol bilan yangi hisob (har doim STUDENT).
+ *
+ * Serverda SMTP sozlangan bo'lsa `{status:'code_sent'}` qaytadi — emaildagi
+ * 6 xonali kodni `confirmRegister` bilan tasdiqlagach hisob ochiladi.
+ * Aks holda hisob darhol ochiladi va `UserOut` qaytadi.
+ */
 export async function registerAccount(
   email: string,
   password: string,
   fullName: string,
-): Promise<UserOut> {
+): Promise<UserOut | 'code_sent'> {
+  const resp = await apiFetch<{
+    access_token?: string;
+    refresh_token?: string;
+    status?: string;
+  }>('/auth/register', {
+    method: 'POST',
+    body: { email, password, full_name: fullName },
+    skipAuth: true,
+  });
+  if (resp?.access_token && resp.refresh_token) {
+    setTokens(resp.access_token, resp.refresh_token);
+    return fetchMe();
+  }
+  return 'code_sent';
+}
+
+/** `POST /auth/register/confirm` — emaildagi kod → hisob yaratiladi. */
+export async function confirmRegister(email: string, code: string): Promise<UserOut> {
   const tokens = await apiFetch<{ access_token: string; refresh_token: string }>(
-    '/auth/register',
-    { method: 'POST', body: { email, password, full_name: fullName }, skipAuth: true },
+    '/auth/register/confirm',
+    { method: 'POST', body: { email, code }, skipAuth: true },
   );
   setTokens(tokens.access_token, tokens.refresh_token);
   return fetchMe();
