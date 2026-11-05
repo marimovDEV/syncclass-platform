@@ -40,6 +40,16 @@ function GoogleMark() {
 }
 
 /**
+ * DEV tezkor kirish tugmalari FAQAT dev muhitda. Productionda yashirin —
+ * backendda ham `APP_ENV=production` da `/auth/dev-login` 404 qaytaradi
+ * (ikki qavatli himoya: tugma yo'q + endpoint yo'q). Lokal prod-buildda
+ * sinash kerak bo'lsa: `NEXT_PUBLIC_ENABLE_DEV_LOGIN=true`.
+ */
+const DEV_LOGIN_ENABLED =
+  process.env.NODE_ENV === 'development' ||
+  process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === 'true';
+
+/**
  * Kirish sahifasi — CONTRACTS.md §4: `GET /auth/google/login` → `{authorize_url}`.
  * OTP/parol yo'q (DoD #1: <= 3 klik).
  *
@@ -158,36 +168,40 @@ function LoginView() {
                 Google orqali davom etish
               </Button>
 
-              <div className="flex w-full items-center gap-2">
-                <div className="h-px flex-1 bg-border/60" />
-                <span className="text-xs uppercase tracking-wider text-muted font-medium">Tezkor kirish (Dev)</span>
-                <div className="h-px flex-1 bg-border/60" />
-              </div>
+              {DEV_LOGIN_ENABLED ? (
+                <>
+                  <div className="flex w-full items-center gap-2">
+                    <div className="h-px flex-1 bg-border/60" />
+                    <span className="text-xs uppercase tracking-wider text-muted font-medium">Tezkor kirish (Dev)</span>
+                    <div className="h-px flex-1 bg-border/60" />
+                  </div>
 
-              <div className="flex w-full flex-col gap-2">
-                <Button
-                  variant="outline"
-                  size="md"
-                  block
-                  loading={devLoadingEmail === 'teacher@syncclass.local'}
-                  disabled={devLoadingEmail !== null || pendingRedirect}
-                  onClick={() => void handleDevLogin('teacher@syncclass.local')}
-                  className="justify-center border-primary/30 hover:border-primary hover:bg-primary/[0.05]"
-                >
-                  👨‍🏫 O’qituvchi sifatida kirish
-                </Button>
-                <Button
-                  variant="outline"
-                  size="md"
-                  block
-                  loading={devLoadingEmail === 'student01@syncclass.local'}
-                  disabled={devLoadingEmail !== null || pendingRedirect}
-                  onClick={() => void handleDevLogin('student01@syncclass.local')}
-                  className="justify-center"
-                >
-                  🧑‍🎓 O’quvchi sifatida kirish (student01)
-                </Button>
-              </div>
+                  <div className="flex w-full flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      size="md"
+                      block
+                      loading={devLoadingEmail === 'teacher@syncclass.local'}
+                      disabled={devLoadingEmail !== null || pendingRedirect}
+                      onClick={() => void handleDevLogin('teacher@syncclass.local')}
+                      className="justify-center border-primary/30 hover:border-primary hover:bg-primary/[0.05]"
+                    >
+                      👨‍🏫 O’qituvchi sifatida kirish
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="md"
+                      block
+                      loading={devLoadingEmail === 'student01@syncclass.local'}
+                      disabled={devLoadingEmail !== null || pendingRedirect}
+                      onClick={() => void handleDevLogin('student01@syncclass.local')}
+                      className="justify-center"
+                    >
+                      🧑‍🎓 O’quvchi sifatida kirish (student01)
+                    </Button>
+                  </div>
+                </>
+              ) : null}
 
               <p className="text-center text-xs text-muted">
                 Yangi foydalanuvchi har doim <span className="font-medium text-fg">o’quvchi</span>{' '}
