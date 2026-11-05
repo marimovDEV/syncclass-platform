@@ -16,7 +16,7 @@ from redis.asyncio import Redis
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import auth, groups, homeworks, presentations, rooms
+from app.api import auth, groups, homeworks, presentations, rooms, users
 from app.core.config import settings
 from app.core.logging import RequestIdMiddleware, setup_logging
 from app.db.session import engine
@@ -66,6 +66,7 @@ app.include_router(groups.router, prefix=f"{API}/groups", tags=["groups"])
 app.include_router(presentations.router, prefix=f"{API}/presentations", tags=["presentations"])
 app.include_router(rooms.router, prefix=API, tags=["rooms"])
 app.include_router(homeworks.router, prefix=API, tags=["homeworks"])
+app.include_router(users.router, prefix=f"{API}/users", tags=["users"])
 app.include_router(ws_routes.router, tags=["websocket"])
 
 

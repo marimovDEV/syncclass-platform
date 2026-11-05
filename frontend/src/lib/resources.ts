@@ -6,6 +6,8 @@
  */
 
 import type {
+  AdminUser,
+  UserRole,
   AppealIn,
   AssetUploadOut,
   DownloadUrlOut,
@@ -233,4 +235,17 @@ export function gradeSubmission(id: string, body: GradeIn): Promise<SubmissionOu
 /** `POST /submissions/{id}/appeal` (STUDENT) — AUDIT.md §E2. */
 export function appealSubmission(id: string, body: AppealIn): Promise<SubmissionOut> {
   return apiFetch<SubmissionOut>(`/submissions/${id}/appeal`, { method: 'POST', body });
+}
+
+/* ------------------------------ adminka ----------------------------------- */
+
+/** `GET /users` (faqat ADMIN) — foydalanuvchilar ro'yxati, email/ism qidiruvi. */
+export function listUsers(query = ''): Promise<AdminUser[]> {
+  const qs = query.trim().length > 0 ? `?query=${encodeURIComponent(query.trim())}` : '';
+  return apiFetch<AdminUser[]>(`/users${qs}`);
+}
+
+/** `PATCH /users/{id}/role` (faqat ADMIN). Rol o'zgarsa foydalanuvchi qayta kiradi. */
+export function setUserRole(id: string, role: UserRole): Promise<AdminUser> {
+  return apiFetch<AdminUser>(`/users/${id}/role`, { method: 'PATCH', body: { role } });
 }

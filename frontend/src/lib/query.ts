@@ -50,4 +50,5 @@ export const queryKeys = {
   submission: (id: string) => ['submissions', id] as const,
   room: (pin: string) => ['rooms', pin] as const,
   roomReport: (pin: string) => ['rooms', pin, 'report'] as const,
+  adminUsers: (query: string) => ['admin', 'users', query] as const,
 } as const;

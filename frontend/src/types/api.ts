@@ -1321,3 +1321,17 @@ export const CONFUSED_COOLDOWN_MS = 30_000;
 export const FOCUS_GRACE_MS = 10_000;
 /** AUDIT.md §E2 — bundan past ishonchda qizil bayroq KO'RSATILMAYDI. */
 export const AI_RED_FLAG_THRESHOLD = 70;
+
+/* ------------------------------ adminka (§ADMIN) --------------------------- */
+
+/** `GET /users` elementi — backend `AdminUserOut` (faqat ADMIN ko'radi). */
+export interface AdminUser {
+  id: string;
+  email: string;
+  full_name: string;
+  avatar_url: string | null;
+  role: UserRole;
+  is_active: boolean;
+  is_onboarded: boolean;
+  created_at: string;
+}

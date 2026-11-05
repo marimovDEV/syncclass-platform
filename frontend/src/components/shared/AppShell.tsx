@@ -3,7 +3,14 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { BookOpen, FileCheck2, LayoutDashboard, Presentation, Users } from 'lucide-react';
+import {
+  BookOpen,
+  FileCheck2,
+  LayoutDashboard,
+  Presentation,
+  ShieldCheck,
+  Users,
+} from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/api';
@@ -35,8 +42,19 @@ const TEACHER_NAV: NavItem[] = [
   { href: '/teacher/groups', label: 'Guruhlar', short: 'Guruhlar', Icon: Users },
 ];
 
+/**
+ * ADMIN: o'qituvchi menyusi + "Adminka". 5-element 320px mobil pastki menyuga
+ * zo'rg'a sig'adi (5×64px=320px), lekin buni faqat admin ko'radi — o'quvchi va
+ * o'qituvchilarda element soni o'zgarmaydi.
+ */
+const ADMIN_NAV: NavItem[] = [
+  ...TEACHER_NAV,
+  { href: '/admin', label: 'Adminka', short: 'Admin', Icon: ShieldCheck },
+];
+
 function navForRole(role: UserRole | null): NavItem[] {
-  if (role === 'TEACHER' || role === 'ADMIN') return TEACHER_NAV;
+  if (role === 'ADMIN') return ADMIN_NAV;
+  if (role === 'TEACHER') return TEACHER_NAV;
   if (role === 'STUDENT') return STUDENT_NAV;
   return [];
 }
