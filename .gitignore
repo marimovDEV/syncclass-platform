@@ -76,3 +76,4 @@ desktop.ini
 *.db
 tmp/
 .cache/
+.vercel/

@@ -1107,14 +1107,28 @@ async def issue_ticket(redis: Redis, user_id: str | uuid.UUID) -> str:
     return ticket
 
 
-async def consume_ticket(redis: Redis, ticket: str) -> str | None:
-    """`GETDEL` — **bir martalik**. Ikkinchi marta ishlatilsa `None`."""
-    if not ticket:
-        return None
-    raw = await redis.getdel(ticket_key(ticket))
+# `GETDEL` Redis >= 6.2 da bor; prod serverlarda 6.0 ham uchraydi (Ubuntu 22.04
+# apt paketi), shuning uchun bir martalik o'qish Lua bilan — xuddi shunday atomar.
+_LUA_GETDEL: Final[str] = """
+local v = redis.call('GET', KEYS[1])
+if v then redis.call('DEL', KEYS[1]) end
+return v
+"""
+
+
+async def atomic_getdel(redis: Redis, key: str) -> str | None:
+    """GET + DEL bitta atomar qadamda (Redis 6.0 bilan ham mos)."""
+    raw = await redis.eval(_LUA_GETDEL, 1, key)  # type: ignore[misc]
     if raw is None:
         return None
     return raw.decode() if isinstance(raw, bytes) else str(raw)
+
+
+async def consume_ticket(redis: Redis, ticket: str) -> str | None:
+    """Bir martalik ticket. Ikkinchi marta ishlatilsa `None`."""
+    if not ticket:
+        return None
+    return await atomic_getdel(redis, ticket_key(ticket))
 
 
 __all__ = [

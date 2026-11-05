@@ -68,6 +68,7 @@ from app.schemas.auth import (
     TokenPair,
     UserOut,
 )
+from app.services.room_state import atomic_getdel
 
 log = logging.getLogger("syncclass.auth")
 
@@ -371,8 +372,9 @@ async def google_callback(
     if not code or not state:
         raise bad_request("INVALID_OAUTH_REQUEST", "`code` va `state` majburiy.")
 
-    # `state` bir martalik: GETDEL — qayta ishlatish (replay) mumkin emas.
-    stored = await redis.getdel(OAUTH_STATE_KEY.format(state=state))
+    # `state` bir martalik: atomar GET+DEL — qayta ishlatish (replay) mumkin emas.
+    # (`GETDEL` emas: prod Redis 6.0 bo'lishi mumkin — room_state.atomic_getdel.)
+    stored = await atomic_getdel(redis, OAUTH_STATE_KEY.format(state=state))
     if stored is None:
         raise bad_request("INVALID_OAUTH_STATE", "Kirish seansi eskirgan. Qaytadan urinib ko'ring.")
 
